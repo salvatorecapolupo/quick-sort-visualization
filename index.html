@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Sort Musicale</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 20px; text-align: center;}
+
+        /* Contenitore grafico */
+        #array-container {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            height: 350px;
+            width: 90%;
+            border-bottom: 2px solid #555;
+            padding: 10px;
+            gap: 4px;
+        }
+
+        /* Stile barra */
+        .bar {
+            background-color: #8a2be2; /* Viola base */
+            width: 100%;
+            margin: 0 1px;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            transition: height 0.1s ease;
+            
+            /* Testo */
+            display: flex;
+            align-items: flex-end; 
+            justify-content: center;
+            padding-bottom: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            overflow: hidden;
+            box-shadow: 0px 0px 5px rgba(0,0,0,0.3);
+        }
+
+        /* Colori di stato */
+        .comparing { background-color: #ff4757 !important; } /* Rosso: confronto */
+        .pivot { background-color: #eccc68 !important; color: #333; } /* Giallo: Pivot */
+        .sorted { background-color: #2ed573 !important; } /* Verde: Ordinato */
+
+        /* Pannello controlli */
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            background: #2c2c2c;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: transform 0.1s, background 0.3s;
+            font-weight: 600;
+        }
+
+        button:active { transform: scale(0.95); }
+        
+        #btn-gen { background-color: #3742fa; color: white; }
+        #btn-sort { background-color: #2ed573; color: #1e1e1e; }
+        #btn-sound { background-color: #555; color: white; width: 120px;}
+        
+        #btn-sound.active {
+            background-color: #ff4757;
+            box-shadow: 0 0 10px #ff4757;
+        }
+
+        button:disabled { background-color: #444; color: #888; cursor: not-allowed; }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Quick Sort Musicale ⚡</h1>
+
+    <div id="array-container"></div>
+
+    <div class="controls">
+        <button onclick="generateArray()" id="btn-gen">Genera Array</button>
+        <button onclick="toggleSound()" id="btn-sound">Audio: OFF</button>
+        <button onclick="startSort()" id="btn-sort">Ordina</button>
+        
+        <div class="slider-group">
+            <label for="speed">Velocità:</label>
+            <input type="range" id="speed" min="5" max="200" value="60">
+        </div>
+    </div>
+
+    <script>
+        // --- VARIABILI GLOBALI ---
+        const container = document.getElementById("array-container");
+        const btnSound = document.getElementById("btn-sound");
+        const btnSort = document.getElementById("btn-sort");
+        const btnGen = document.getElementById("btn-gen");
+        const speedInput = document.getElementById("speed");
+
+        let array = [];
+        const numBars = 30; 
+        let audioCtx = null;
+        let isMuted = true;
+
+        // --- GESTIONE AUDIO (VERSIONE CORRETTA SENZA SATURAZIONE) ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function toggleSound() {
+            initAudio();
+            isMuted = !isMuted;
+            
+            if (isMuted) {
+                btnSound.innerText = "Audio: OFF";
+                btnSound.classList.remove("active");
+            } else {
+                btnSound.innerText = "Audio: ON";
+                btnSound.classList.add("active");
+            }
+        }
+
+        function playNote(value) {
+            if (isMuted || !audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            osc.frequency.value = 200 + (value * 2);
+            osc.type = "sine"; 
+
+            const now = audioCtx.currentTime;
+            const duration = 0.1;
+
+            // Inviluppo per evitare il "click"
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.05, now + 0.01); // Volume max ridotto a 0.05
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+            osc.start(now);
+            osc.stop(now + duration); 
+        }
+
+        // --- UTILITÀ ---
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function getDelay() {
+            // Quick sort è veloce, rallentiamo un po' la scala base
+            return 250 - speedInput.value; 
+        }
+
+        // Scambia altezze e testo nel DOM e nell'array logico
+        async function swapBars(el1, el2) {
+            const style1 = window.getComputedStyle(el1);
+            const style2 = window.getComputedStyle(el2);
+
+            const h1 = style1.height;
+            const h2 = style2.height;
+            const t1 = el1.innerText;
+            const t2 = el2.innerText;
+
+            el1.style.height = h2;
+            el2.style.height = h1;
+            el1.innerText = t2;
+            el2.innerText = t1;
+        }
+
+        function generateArray() {
+            container.innerHTML = "";
+            array = [];
+            
+            for (let i = 0; i < numBars; i++) {
+                let val = Math.floor(Math.random() * 250) + 20;
+                array.push(val); // Teniamo traccia logica, anche se usiamo il DOM
+
+                const bar = document.createElement("div");
+                bar.classList.add("bar");
+                bar.style.height = `${val}px`;
+                bar.style.width = `${100 / numBars}%`; 
+                bar.innerText = val;
+                container.appendChild(bar);
+            }
+            btnSort.disabled = false;
+        }
+
+        // --- ALGORITMO QUICK SORT ---
+
+        async function startSort() {
+            btnSort.disabled = true;
+            btnGen.disabled = true;
+            
+            const bars = document.getElementsByClassName("bar");
+            
+            // Avvia la ricorsione
+            await quickSort(bars, 0, bars.length - 1);
+
+            // Suonata finale
+            if(!isMuted && audioCtx) {
+                for(let k=0; k<bars.length; k++) {
+                     playNote(parseInt(bars[k].innerText));
+                     await sleep(20);
+                }
+            }
+
+            btnGen.disabled = false;
+            btnSort.disabled = false;
+        }
+
+        async function quickSort(bars, start, end) {
+            if (start < end) {
+                // Trova l'indice di partizione
+                let pivotIndex = await partition(bars, start, end);
+                
+                // Ordina ricorsivamente le due metà
+                await quickSort(bars, start, pivotIndex - 1);
+                await quickSort(bars, pivotIndex + 1, end);
+            } else if (start === end) {
+                // Caso base singolo elemento
+                bars[start].classList.add("sorted"); 
+            }
+        }
+
+        async function partition(bars, start, end) {
+            // Scegliamo l'ultimo elemento come Pivot
+            let pivotValue = parseInt(bars[end].innerText);
+            
+            // Coloriamo il pivot di GIALLO
+            bars[end].classList.add("pivot");
+            playNote(pivotValue); 
+
+            let i = start - 1; // Indice del più piccolo elemento
+
+            for (let j = start; j < end; j++) {
+                // Evidenzia elemento corrente di ROSSO
+                bars[j].classList.add("comparing");
+                
+                let valJ = parseInt(bars[j].innerText);
+                playNote(valJ); // Suona la nota che stiamo confrontando
+                
+                await sleep(getDelay());
+
+                if (valJ < pivotValue) {
+                    i++;
+                    // Scambia
+                    await swapBars(bars[i], bars[j]);
+                }
+                
+                // Rimuovi rosso
+                bars[j].classList.remove("comparing");
+            }
+
+            // Metti il pivot nella posizione corretta (i + 1)
+            await swapBars(bars[i + 1], bars[end]);
+            
+            // Il pivot ora è nella sua posizione finale -> VERDE
+            bars[end].classList.remove("pivot"); // Rimuovi giallo
+            bars[i + 1].classList.add("sorted"); // Metti verde
+
+            // Piccola pausa per vedere il pivot posizionato
+            playNote(parseInt(bars[i+1].innerText));
+            await sleep(getDelay());
+
+            return i + 1;
+        }
+
+        // Avvio iniziale
+        generateArray();
+
+    </script>
+</body>
+</html>
