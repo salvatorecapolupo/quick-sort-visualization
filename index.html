@@ -185,21 +185,23 @@
         }
 
         // Scambia altezze e testo nel DOM e nell'array logico
-        async function swapBars(el1, el2) {
-            const style1 = window.getComputedStyle(el1);
-            const style2 = window.getComputedStyle(el2);
+// Funzione SWAP corretta
+// Non legge più lo stile (che potrebbe essere in transizione/animazione),
+// ma si basa sui valori numerici scritti dentro le barre.
+async function swapBars(el1, el2) {
+    // 1. Leggiamo i valori numerici puri (Fonte di verità)
+    const val1 = parseInt(el1.innerText);
+    const val2 = parseInt(el2.innerText);
 
-            const h1 = style1.height;
-            const h2 = style2.height;
-            const t1 = el1.innerText;
-            const t2 = el2.innerText;
+    // 2. Scambiamo i testi
+    el1.innerText = val2;
+    el2.innerText = val1;
 
-            el1.style.height = h2;
-            el2.style.height = h1;
-            el1.innerText = t2;
-            el2.innerText = t1;
-        }
-
+    // 3. Impostiamo l'altezza in base al NUOVO numero
+    // Questo sovrascrive qualsiasi animazione in corso con il valore corretto
+    el1.style.height = `${val2}px`;
+    el2.style.height = `${val1}px`;
+}
         function generateArray() {
             container.innerHTML = "";
             array = [];
